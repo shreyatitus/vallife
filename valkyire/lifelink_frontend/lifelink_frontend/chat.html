@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - LifeLink</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Blood Donation Assistant</h1>
+        
+        <div id="chat-box" style="border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 15px; margin-bottom: 15px; background: #f9f9f9;">
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="message-input" placeholder="Ask about blood donation..." style="flex: 1; padding: 10px;">
+            <button onclick="sendMessage()" style="padding: 10px 20px;">Send</button>
+        </div>
+        
+        <a href="dashboard.html" style="display: inline-block; margin-top: 15px;">← Back to Dashboard</a>
+    </div>
+
+    <script src="js/chat.js"></script>
+</body>
+</html>

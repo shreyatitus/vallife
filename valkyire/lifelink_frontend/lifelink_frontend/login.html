@@ -21,7 +21,23 @@
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
-<script src="js/auth.js"></script>
+<script>
+async function login() {
+    const loginData = {
+        email: document.getElementById("loginEmail").value,
+        password: document.getElementById("loginPassword").value
+    };
+
+    const result = await apiRequest("/login", "POST", loginData);
+
+    if (result.status === "success") {
+        localStorage.setItem("user", JSON.stringify(result.user));
+        window.location.href = "dashboard.html";
+    } else {
+        document.getElementById("message").innerText = result.message || "Login failed";
+    }
+}
+</script>
 
 </body>
 </html>

@@ -25,6 +25,8 @@
         <option>AB-</option>
     </select>
 
+    <button type="button" onclick="getLocation()">Get My Location</button>
+    <p id="locationStatus"></p>
     <input type="password" id="password" placeholder="Password">
 
     <button class="btn btn-primary" onclick="register()">Register</button>
@@ -34,7 +36,46 @@
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
-<script src="js/auth.js"></script>
+<script>
+let userLat = 0, userLon = 0;
+
+function getLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                userLat = position.coords.latitude;
+                userLon = position.coords.longitude;
+                document.getElementById("locationStatus").innerText = `Location captured: ${userLat.toFixed(4)}, ${userLon.toFixed(4)}`;
+            },
+            () => {
+                document.getElementById("locationStatus").innerText = "Location access denied";
+            }
+        );
+    } else {
+        document.getElementById("locationStatus").innerText = "GPS not supported";
+    }
+}
+
+async function register() {
+    if (!userLat || !userLon) {
+        document.getElementById("message").innerText = "Please get your location first";
+        return;
+    }
+    
+    const userData = {
+        name: document.getElementById("name").value,
+        email: document.getElementById("email").value,
+        phone: document.getElementById("phone").value,
+        blood: document.getElementById("blood").value,
+        latitude: userLat,
+        longitude: userLon,
+        password: document.getElementById("password").value
+    };
+
+    const result = await apiRequest("/register", "POST", userData);
+    document.getElementById("message").innerText = result.message || "Registration successful!";
+}
+</script>
 
 </body>
 </html>

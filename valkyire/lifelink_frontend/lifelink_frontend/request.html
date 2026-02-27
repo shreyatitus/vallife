@@ -62,12 +62,15 @@ async function createRequest() {
         return;
     }
     
+    const user = JSON.parse(localStorage.getItem("user"));
+    
     const requestData = {
         patientName: document.getElementById("patientName").value,
         blood: document.getElementById("bloodNeeded").value,
         hospital: document.getElementById("hospital").value,
         latitude: reqLat,
-        longitude: reqLon
+        longitude: reqLon,
+        user_id: user.id
     };
 
     const result = await apiRequest("/create-request", "POST", requestData);

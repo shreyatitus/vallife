@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Available Requests</title>
+    <title>My Requests</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<div class="navbar">Available Blood Requests</div>
+<div class="navbar">My Blood Requests</div>
 
 <div class="container">
-    <h2>Pending Blood Requests (Your Blood Type)</h2>
+    <h2>My Requests</h2>
     <div id="requestsList"></div>
 </div>
 
@@ -23,32 +23,26 @@ window.onload = async function() {
         return;
     }
     
-    const result = await apiRequest(`/get-requests?user_id=${user.id}`);
+    const result = await apiRequest(`/my-requests?user_id=${user.id}`);
     const list = document.getElementById("requestsList");
     
     if (result.requests && result.requests.length > 0) {
         result.requests.forEach(req => {
+            const statusColor = req.status === 'accepted' ? 'green' : 'orange';
             list.innerHTML += `
                 <div class="card">
                     <h3>${req.patientName}</h3>
                     <p>Blood Type: ${req.blood}</p>
                     <p>Hospital: ${req.hospital}</p>
-                    <p>Status: ${req.status}</p>
-                    <button class="btn btn-primary" onclick="acceptRequest(${req.id})">Accept Request</button>
+                    <p style="color: ${statusColor}; font-weight: bold;">Status: ${req.status.toUpperCase()}</p>
+                    <p><small>Created: ${new Date(req.created_at).toLocaleString()}</small></p>
                 </div>
             `;
         });
     } else {
-        list.innerHTML = "<p>No pending requests for your blood type</p>";
+        list.innerHTML = "<p>You haven't created any requests yet</p>";
     }
 };
-
-async function acceptRequest(requestId) {
-    const user = JSON.parse(localStorage.getItem("user"));
-    const result = await apiRequest("/accept-request", "POST", {request_id: requestId, donor_id: user.id});
-    alert(result.message);
-    location.reload();
-}
 </script>
 
 </body>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">Admin Dashboard</div>
+
+<div class="container">
+    <h2>All Accepted Requests</h2>
+    <div id="requestsList"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+window.onload = async function() {
+    const admin = JSON.parse(localStorage.getItem("admin"));
+    if (!admin) {
+        window.location.href = "admin-login.html";
+        return;
+    }
+    
+    const result = await apiRequest("/admin/accepted-requests");
+    const list = document.getElementById("requestsList");
+    
+    if (result.requests && result.requests.length > 0) {
+        result.requests.forEach(req => {
+            list.innerHTML += `
+                <div class="card">
+                    <h3>${req.patientName}</h3>
+                    <p>Blood Type: ${req.blood}</p>
+                    <p>Hospital: ${req.hospital}</p>
+                    <p>Status: <span style="color: green; font-weight: bold;">${req.status.toUpperCase()}</span></p>
+                    <p>Donor ID: ${req.matched_donor_id}</p>
+                    <p>Created: ${new Date(req.created_at).toLocaleString()}</p>
+                    <button class="btn btn-primary" onclick="verifyRequest(${req.id})">Verify & Complete</button>
+                </div>
+            `;
+        });
+    } else {
+        list.innerHTML = "<p>No accepted requests to verify</p>";
+    }
+};
+
+async function verifyRequest(requestId) {
+    const result = await apiRequest("/admin/verify-request", "POST", {request_id: requestId});
+    alert(result.message);
+    location.reload();
+}
+</script>
+
+</body>
+</html>

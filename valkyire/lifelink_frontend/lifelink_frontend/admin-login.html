@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">Admin Login</div>
+
+<div class="container">
+    <h2>Admin Login</h2>
+
+    <input type="text" id="adminUsername" placeholder="Username">
+    <input type="password" id="adminPassword" placeholder="Password">
+
+    <button onclick="adminLogin()">Login</button>
+
+    <p id="message"></p>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+async function adminLogin() {
+    const loginData = {
+        username: document.getElementById("adminUsername").value,
+        password: document.getElementById("adminPassword").value
+    };
+
+    const result = await apiRequest("/admin-login", "POST", loginData);
+
+    if (result.status === "success") {
+        localStorage.setItem("admin", JSON.stringify({username: loginData.username}));
+        window.location.href = "admin-dashboard.html";
+    } else {
+        document.getElementById("message").innerText = result.message || "Invalid credentials";
+    }
+}
+</script>
+
+</body>
+</html>

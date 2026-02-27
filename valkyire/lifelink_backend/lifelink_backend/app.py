@@ -65,8 +65,8 @@ def create_request():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO requests (patientName, blood, hospital, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
-        (data["patientName"], data["blood"], data["hospital"], data.get("latitude", 0), data.get("longitude", 0))
+        "INSERT INTO requests (patientName, blood, hospital, latitude, longitude, created_by) VALUES (%s, %s, %s, %s, %s, %s)",
+        (data["patientName"], data["blood"], data["hospital"], data.get("latitude", 0), data.get("longitude", 0), data.get("user_id"))
     )
     conn.commit()
     request_id = cursor.lastrowid
@@ -115,6 +115,7 @@ def nlp_request():
     
     # Create request
     conn = get_db()
+<<<<<<< HEAD
     cursor = conn.cursor()
     cursor.execute(
         """INSERT INTO requests (patientName, blood, hospital, latitude, longitude, 
@@ -124,6 +125,24 @@ def nlp_request():
     )
     conn.commit()
     request_id = cursor.lastrowid
+=======
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT blood FROM users WHERE id=%s", (user_id,))
+    user = cursor.fetchone()
+    
+    if user:
+        cursor.execute("""
+            SELECT r.* FROM requests r
+            LEFT JOIN notifications n ON r.id = n.request_id AND n.donor_id = %s
+            WHERE r.blood=%s AND r.status='pending'
+            ORDER BY r.created_at DESC
+        """, (user_id, user['blood']))
+        requests = cursor.fetchall()
+    else:
+        requests = []
+    
+>>>>>>> b44de129866b59920cd97066b83ed6c8e2b2569f
     cursor.close()
     conn.close()
     
@@ -186,6 +205,68 @@ def autonomous_monitor():
     """Trigger autonomous monitoring and actions"""
     results = orchestrator.run_autonomous_monitoring()
     return jsonify({"actions_taken": results})
+
+@app.route("/accept-request", methods=["POST"])
+def accept_request():
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE requests SET status='accepted', matched_donor_id=%s WHERE id=%s", (data['donor_id'], data['request_id']))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    return jsonify({"message": "Request accepted! Awaiting admin verification."})
+
+@app.route("/my-requests", methods=["GET"])
+def my_requests():
+    user_id = request.args.get('user_id')
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM requests WHERE created_by=%s ORDER BY created_at DESC", (user_id,))
+    requests = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify({"requests": requests})
+
+@app.route("/admin-login", methods=["POST"])
+def admin_login():
+    data = request.json
+    if data["username"] == "admin" and data["password"] == "admin123":
+        return jsonify({"status": "success"})
+    return jsonify({"status": "error", "message": "Invalid credentials"})
+
+@app.route("/admin/accepted-requests", methods=["GET"])
+def admin_accepted_requests():
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM requests WHERE status='accepted' ORDER BY created_at DESC")
+    requests = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify({"requests": requests})
+
+@app.route("/admin/verify-request", methods=["POST"])
+def admin_verify_request():
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT matched_donor_id FROM requests WHERE id=%s", (data['request_id'],))
+    req = cursor.fetchone()
+    
+    if req and req['matched_donor_id']:
+        cursor.execute("UPDATE requests SET status='completed' WHERE id=%s", (data['request_id'],))
+        cursor.execute("UPDATE users SET donations=donations+1, points=points+10 WHERE id=%s", (req['matched_donor_id'],))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Request verified! Donor awarded 10 points."})
+    
+    cursor.close()
+    conn.close()
+    return jsonify({"message": "Request not found"})
 
 if __name__ == "__main__":
     print("🤖 LifeLink AI Agent System Starting...")

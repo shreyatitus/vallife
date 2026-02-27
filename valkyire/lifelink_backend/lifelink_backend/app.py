@@ -2,11 +2,17 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from database import get_db, init_db
 from services.ai_matching import process_blood_request
+from agents.orchestrator import AgentOrchestrator
+from agents.nlp_agent import NLPAgent
 
 app = Flask(__name__)
 CORS(app)
 
 init_db()
+
+# Initialize AI agents
+orchestrator = AgentOrchestrator()
+nlp_agent = NLPAgent()
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -67,11 +73,19 @@ def create_request():
     cursor.close()
     conn.close()
     
-    result = process_blood_request(request_id, data["blood"], data.get("latitude", 0), data.get("longitude", 0))
+    # Use AI agent orchestrator for intelligent processing
+    result = orchestrator.process_blood_request(request_id, data)
     
     if result["status"] == "success":
-        return jsonify({"message": f"Donor found: {result['donor']['name']} ({result['donor']['distance']} km away)"})
-    return jsonify({"message": result["message"]})
+        donor = result['primary_donor']
+        return jsonify({
+            "message": f"AI matched donor: {donor['name']} ({donor['distance']} km away)",
+            "urgency": result['urgency'],
+            "availability_score": donor['availability_score'],
+            "backup_donors": result['backup_count'],
+            "analysis": result['analysis']
+        })
+    return jsonify({"message": result["message"], "analysis": result.get('analysis', {})})
 
 @app.route("/request-blood", methods=["POST"])
 def request_blood():
@@ -87,5 +101,97 @@ def request_blood():
         return jsonify({"message": "Donor Found", "name": donor["name"], "points": donor["points"]})
     return jsonify({"message": "No donor found"})
 
+@app.route("/nlp-request", methods=["POST"])
+def nlp_request():
+    """Process natural language blood request"""
+    data = request.json
+    text = data.get("text", "")
+    
+    # Parse natural language
+    parsed = nlp_agent.parse_natural_language_request(text)
+    
+    if not parsed.get("bloodType"):
+        return jsonify({"error": "Could not determine blood type from request"})
+    
+    # Create request
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO requests (patientName, blood, hospital, latitude, longitude, 
+           urgency, natural_language_request) VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+        (parsed["patientName"], parsed["bloodType"], parsed["hospital"], 
+         data.get("latitude", 0), data.get("longitude", 0), parsed["urgency"], text)
+    )
+    conn.commit()
+    request_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    
+    # Process with AI agents
+    result = orchestrator.process_blood_request(request_id, {
+        "patientName": parsed["patientName"],
+        "blood": parsed["bloodType"],
+        "hospital": parsed["hospital"],
+        "latitude": data.get("latitude", 0),
+        "longitude": data.get("longitude", 0)
+    })
+    
+    return jsonify({"parsed": parsed, "result": result})
+
+@app.route("/donor-response", methods=["POST"])
+def donor_response():
+    """Handle donor response and trigger learning"""
+    data = request.json
+    notification_id = data["notification_id"]
+    response = data["response"]  # 'accepted' or 'declined'
+    response_time = data.get("response_time", 300)
+    
+    # Update notification
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT donor_id FROM notifications WHERE id=%s", (notification_id,))
+    notif = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if notif:
+        # Learn from response
+        orchestrator.matcher.update_donor_pattern(
+            notif['donor_id'], 
+            response_time, 
+            response == 'accepted'
+        )
+        
+        if response == 'declined':
+            # Autonomous retry with next donor
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT request_id FROM notifications WHERE id=%s", (notification_id,))
+            req = cursor.fetchone()
+            cursor.close()
+            
+            if req:
+                retry_result = orchestrator.autonomous_retry(req['request_id'])
+                return jsonify({"message": "Response recorded, contacting next donor", "retry": retry_result})
+    
+    return jsonify({"message": "Response recorded"})
+
+@app.route("/system-insights", methods=["GET"])
+def system_insights():
+    """Get AI-driven system insights"""
+    insights = orchestrator.get_system_insights()
+    return jsonify(insights)
+
+@app.route("/autonomous-monitor", methods=["POST"])
+def autonomous_monitor():
+    """Trigger autonomous monitoring and actions"""
+    results = orchestrator.run_autonomous_monitoring()
+    return jsonify({"actions_taken": results})
+
 if __name__ == "__main__":
+    print("🤖 LifeLink AI Agent System Starting...")
+    print("✓ Coordinator Agent: Analyzes requests and makes strategic decisions")
+    print("✓ Matcher Agent: Finds optimal donors with predictive scoring")
+    print("✓ Communication Agent: Generates personalized messages")
+    print("✓ Monitor Agent: Autonomous monitoring and retry logic")
+    print("✓ NLP Agent: Natural language request processing")
     app.run(debug=True, port=5000)

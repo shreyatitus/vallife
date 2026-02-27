@@ -26,7 +26,8 @@
     </select>
 
     <input type="text" id="hospital" placeholder="Hospital Name">
-    <input type="text" id="location" placeholder="Location">
+    <button type="button" onclick="getLocation()">Get Hospital Location</button>
+    <p id="locationStatus"></p>
 
     <button onclick="createRequest()">Submit Request</button>
 
@@ -35,7 +36,44 @@
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
-<script src="js/request.js"></script>
+<script>
+let reqLat = 0, reqLon = 0;
+
+function getLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                reqLat = position.coords.latitude;
+                reqLon = position.coords.longitude;
+                document.getElementById("locationStatus").innerText = `Location: ${reqLat.toFixed(4)}, ${reqLon.toFixed(4)}`;
+            },
+            () => {
+                document.getElementById("locationStatus").innerText = "Location access denied";
+            }
+        );
+    } else {
+        document.getElementById("locationStatus").innerText = "GPS not supported";
+    }
+}
+
+async function createRequest() {
+    if (!reqLat || !reqLon) {
+        document.getElementById("message").innerText = "Please get location first";
+        return;
+    }
+    
+    const requestData = {
+        patientName: document.getElementById("patientName").value,
+        blood: document.getElementById("bloodNeeded").value,
+        hospital: document.getElementById("hospital").value,
+        latitude: reqLat,
+        longitude: reqLon
+    };
+
+    const result = await apiRequest("/create-request", "POST", requestData);
+    document.getElementById("message").innerText = result.message;
+}
+</script>
 
 </body>
 </html>

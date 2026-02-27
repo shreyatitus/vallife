@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register - LifeLink</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="card">
+    <h2>Donor Registration</h2>
+
+    <input type="text" id="name" placeholder="Full Name">
+    <input type="email" id="email" placeholder="Email">
+    <input type="text" id="phone" placeholder="Phone">
+
+    <select id="blood">
+        <option value="">Select Blood Group</option>
+        <option>A+</option>
+        <option>B+</option>
+        <option>O+</option>
+        <option>AB+</option>
+        <option>A-</option>
+        <option>B-</option>
+        <option>O-</option>
+        <option>AB-</option>
+    </select>
+
+    <input type="password" id="password" placeholder="Password">
+
+    <button class="btn btn-primary" onclick="register()">Register</button>
+
+    <div class="message" id="message"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+
+</body>
+</html>

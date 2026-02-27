@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Request Blood</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">Blood Request</div>
+
+<div class="container">
+    <h2>Request Blood</h2>
+
+    <input type="text" id="patientName" placeholder="Patient Name">
+    
+    <select id="bloodNeeded">
+        <option value="">Select Blood Group</option>
+        <option>A+</option>
+        <option>B+</option>
+        <option>O+</option>
+        <option>AB+</option>
+        <option>A-</option>
+        <option>B-</option>
+        <option>O-</option>
+        <option>AB-</option>
+    </select>
+
+    <input type="text" id="hospital" placeholder="Hospital Name">
+    <input type="text" id="location" placeholder="Location">
+
+    <button onclick="createRequest()">Submit Request</button>
+
+    <p id="message"></p>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/request.js"></script>
+
+</body>
+</html>

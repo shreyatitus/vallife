@@ -43,7 +43,7 @@ window.onload = async function() {
                     <p>Blood Type: ${req.blood}</p>
                     <p>Hospital: ${req.hospital}</p>
                     <p>Status: ${req.status}</p>
-                    <button class="btn btn-primary" onclick="acceptRequest('${req.id}')">Accept Request</button>
+                    <button class="btn btn-primary" onclick="acceptRequest(${req.id})">Accept Request</button>
                 </div>
             `;
         });

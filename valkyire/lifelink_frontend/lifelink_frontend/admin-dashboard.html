@@ -36,7 +36,7 @@ window.onload = async function() {
                     <p>Status: <span style="color: green; font-weight: bold;">${req.status.toUpperCase()}</span></p>
                     <p>Donor ID: ${req.matched_donor_id}</p>
                     <p>Created: ${new Date(req.created_at).toLocaleString()}</p>
-                    <button class="btn btn-primary" onclick="verifyRequest('${req.id}')">Verify & Complete</button>
+                    <button class="btn btn-primary" onclick="verifyRequest(${req.id})">Verify & Complete</button>
                 </div>
             `;
         });

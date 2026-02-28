@@ -1,168 +1,122 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
+from database import get_db, init_db
+from agents.simple_orchestrator import SimpleAgentOrchestrator
 
 app = Flask(__name__)
 CORS(app)
 
-# In-memory storage for testing
-pending_users = {}
-approved_users = {}
-user_id_counter = 1
+init_db()
 
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"status": "LifeLink API Running", "version": "1.0"})
+# Initialize AI Agent
+agent = SimpleAgentOrchestrator()
 
 @app.route("/register", methods=["POST"])
 def register():
-    global user_id_counter
     data = request.json
-    
-    age = int(data.get("age", 0))
-    weight = float(data.get("weight", 0))
-    height = float(data.get("height", 0))
-    report_date = datetime.strptime(data.get("reportDate"), "%Y-%m-%d")
-    days_old = (datetime.now() - report_date).days
-    
-    if age < 18 or age > 65:
-        return jsonify({"message": "Age must be between 18 and 65"}), 400
-    
-    if weight < 50:
-        return jsonify({"message": "Weight must be at least 50 kg"}), 400
-    
-    if height < 150:
-        return jsonify({"message": "Height must be at least 150 cm"}), 400
-    
-    if days_old > 90:
-        return jsonify({"message": "Blood test report must be within last 90 days"}), 400
-    
-    pending_users[user_id_counter] = {
-        "id": user_id_counter,
-        "name": data["name"],
-        "email": data["email"],
-        "phone": data.get("phone", ""),
-        "age": age,
-        "weight": weight,
-        "height": height,
-        "blood": data["blood"],
-        "password": data["password"],
-        "latitude": data.get("latitude", 0),
-        "longitude": data.get("longitude", 0),
-        "reportData": data.get("reportData"),
-        "reportName": data.get("reportName"),
-        "reportDate": data.get("reportDate"),
-        "status": "pending"
-    }
-    user_id_counter += 1
-    
-    return jsonify({"message": "Registration submitted! You will receive an email once verified."})
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO users (name, email, phone, blood, password, latitude, longitude) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (data["name"], data["email"], data.get("phone", ""), data["blood"], data["password"], data.get("latitude", 0), data.get("longitude", 0))
+        )
+        conn.commit()
+        return jsonify({"message": "Registration successful"})
+    except Exception as e:
+        return jsonify({"message": f"Registration failed: {str(e)}"})
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route("/login", methods=["POST"])
 def login():
     data = request.json
-    email = data.get("email")
-    password = data.get("password")
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM users WHERE email=%s AND password=%s", (data["email"], data["password"]))
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
     
-    for user in approved_users.values():
-        if user["email"] == email and user["password"] == password:
-            return jsonify({"status": "success", "user": {"id": user["id"], "name": user["name"], "email": email}})
-    
-    for user in pending_users.values():
-        if user["email"] == email:
-            return jsonify({"status": "error", "message": "Account pending admin verification"})
-    
+    if user:
+        return jsonify({"status": "success", "user": {"id": user["id"], "name": user["name"], "email": user["email"]}})
     return jsonify({"status": "error", "message": "Invalid credentials"})
 
 @app.route("/dashboard/<int:uid>", methods=["GET"])
 def dashboard(uid):
-    for user in approved_users.values():
-        if user["id"] == uid:
-            return jsonify({
-                "donations": user.get("donations", 0),
-                "points": user.get("points", 0),
-                "status": "Eligible"
-            })
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT donations, points FROM users WHERE id=%s", (uid,))
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if user:
+        return jsonify({"donations": user["donations"], "points": user["points"], "status": "Eligible"})
     return jsonify({"donations": 0, "points": 0, "status": "Unknown"})
-
-@app.route("/admin-login", methods=["POST"])
-def admin_login():
-    data = request.json
-    if data["username"] == "admin" and data["password"] == "admin123":
-        return jsonify({"status": "success"})
-    return jsonify({"status": "error", "message": "Invalid credentials"})
-
-@app.route("/admin/pending-users", methods=["GET"])
-def admin_pending_users():
-    return jsonify({"users": list(pending_users.values())})
-
-@app.route("/admin/approve-user", methods=["POST"])
-def admin_approve_user():
-    data = request.json
-    user_id = data["user_id"]
-    
-    if user_id in pending_users:
-        user = pending_users[user_id]
-        user["status"] = "approved"
-        user["donations"] = 0
-        user["points"] = 0
-        approved_users[user_id] = user
-        del pending_users[user_id]
-        
-        try:
-            from services.email_service import send_email
-            send_email(
-                user['email'], 
-                "LifeLink Account Approved", 
-                f"Dear {user['name']},\n\nYour LifeLink donor account has been verified and approved! You can now login and start saving lives.\n\nThank you for joining LifeLink.\n\nBest regards,\nLifeLink Team"
-            )
-        except Exception as e:
-            print(f"Email error: {e}")
-        
-        return jsonify({"message": "User approved and notified via email"})
-    
-    return jsonify({"message": "User not found"})
-
-@app.route("/admin/reject-user", methods=["POST"])
-def admin_reject_user():
-    data = request.json
-    user_id = data["user_id"]
-    
-    if user_id in pending_users:
-        del pending_users[user_id]
-        return jsonify({"message": "User registration rejected"})
-    
-    return jsonify({"message": "User not found"})
 
 @app.route("/create-request", methods=["POST"])
 def create_request():
+    """
+    User creates blood request → AI Agent activates
+    Workflow: Filter → Cooldown → Distance → Rank → Notify → Retry
+    """
     data = request.json
-    return jsonify({"message": f"Blood request created for {data.get('patientName', 'patient')}"})
+    
+    # Store request in database
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO requests (patientName, blood, hospital, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
+        (data["patientName"], data["blood"], data["hospital"], data.get("latitude", 0), data.get("longitude", 0))
+    )
+    conn.commit()
+    request_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    
+    # AI Agent processes request autonomously
+    result = agent.process_blood_request(request_id, data)
+    
+    if result["status"] == "success":
+        return jsonify({
+            "message": f"✓ Donor found: {result['donor']['name']} ({result['donor']['distance']} km away)",
+            "donor": result['donor'],
+            "notification_id": result['notification_id'],
+            "backup_donors": result['backup_donors_count']
+        })
+    
+    return jsonify({
+        "message": result["message"],
+        "step_failed": result.get('step', 'unknown')
+    })
 
-@app.route("/get-requests", methods=["GET"])
-def get_requests():
-    return jsonify({"requests": []})
-
-@app.route("/my-requests", methods=["GET"])
-def my_requests():
-    return jsonify({"requests": []})
-
-@app.route("/accept-request", methods=["POST"])
-def accept_request():
-    return jsonify({"message": "Request accepted"})
-
-@app.route("/admin/accepted-requests", methods=["GET"])
-def admin_accepted_requests():
-    return jsonify({"requests": []})
-
-@app.route("/admin/verify-request", methods=["POST"])
-def admin_verify_request():
-    return jsonify({"message": "Request verified"})
+@app.route("/donor-response", methods=["POST"])
+def donor_response():
+    """If declined → tries next (Autonomous retry)"""
+    data = request.json
+    notification_id = data["notification_id"]
+    response = data["response"]  # 'accepted' or 'declined'
+    
+    result = agent.handle_donor_response(notification_id, response)
+    
+    return jsonify(result)
 
 if __name__ == "__main__":
-    print("LifeLink Backend Starting (In-Memory Mode)...")
-    print("Registration with validation")
-    print("Admin verification system")
-    print("Email notifications")
-    print("Server running on http://localhost:5000")
+    print("\n" + "="*60)
+    print("🤖 LifeLink Agentic AI System")
+    print("="*60)
+    print("\nWorkflow:")
+    print("  1. User creates blood request")
+    print("  2. AI Agent activates")
+    print("  3. Filters donors (blood group)")
+    print("  4. Checks cooldown eligibility")
+    print("  5. Calculates distance (Haversine)")
+    print("  6. Ranks nearest valid donors")
+    print("  7. Notifies top donor")
+    print("  8. If declined → tries next")
+    print("\n" + "="*60)
+    print("Server starting on http://localhost:5000")
+    print("="*60 + "\n")
     app.run(debug=True, port=5000)

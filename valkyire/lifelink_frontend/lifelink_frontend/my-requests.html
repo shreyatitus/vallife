@@ -23,7 +23,7 @@ window.onload = async function() {
         return;
     }
     
-    const result = await apiRequest(`/my-requests?userId=${user.id}`);
+    const result = await apiRequest(`/my-requests?user_id=${user.id}`);
     const list = document.getElementById("requestsList");
     
     if (result.requests && result.requests.length > 0) {

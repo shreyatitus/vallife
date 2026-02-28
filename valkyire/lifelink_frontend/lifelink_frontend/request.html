@@ -70,7 +70,7 @@ async function createRequest() {
         hospital: document.getElementById("hospital").value,
         latitude: reqLat,
         longitude: reqLon,
-        userId: user.id
+        user_id: user.id
     };
 
     const result = await apiRequest("/create-request", "POST", requestData);

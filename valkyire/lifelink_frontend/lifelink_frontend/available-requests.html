@@ -23,8 +23,17 @@ window.onload = async function() {
         return;
     }
     
-    const result = await apiRequest(`/get-requests?user_id=${user.id}`);
+    const result = await apiRequest(`/available-requests?userId=${user.id}`);
     const list = document.getElementById("requestsList");
+    
+    if (result.cooldown) {
+        list.innerHTML = `<div class="card" style="background: #fef3c7; border-left: 4px solid #f59e0b;">
+            <h3>⏳ Cooldown Period</h3>
+            <p>${result.message}</p>
+            <p>You can donate again after the cooldown period ends.</p>
+        </div>`;
+        return;
+    }
     
     if (result.requests && result.requests.length > 0) {
         result.requests.forEach(req => {
@@ -34,6 +43,7 @@ window.onload = async function() {
                     <p>Blood Type: ${req.blood}</p>
                     <p>Hospital: ${req.hospital}</p>
                     <p>Status: ${req.status}</p>
+                    <button class="btn btn-primary" onclick="acceptRequest('${req.id}')">Accept Request</button>
                 </div>
             `;
         });
@@ -41,6 +51,13 @@ window.onload = async function() {
         list.innerHTML = "<p>No pending requests for your blood type</p>";
     }
 };
+
+async function acceptRequest(requestId) {
+    const user = JSON.parse(localStorage.getItem("user"));
+    const result = await apiRequest("/accept-request", "POST", {request_id: requestId, donor_id: user.id});
+    alert(result.message);
+    location.reload();
+}
 </script>
 
 </body>

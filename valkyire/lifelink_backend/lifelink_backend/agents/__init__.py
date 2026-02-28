@@ -4,6 +4,7 @@ from .communication_agent import CommunicationAgent
 from .monitor_agent import MonitorAgent
 from .orchestrator import AgentOrchestrator
 from .nlp_agent import NLPAgent
+from .chatbot_agent import ChatbotAgent
 
 __all__ = [
     'CoordinatorAgent',
@@ -11,5 +12,6 @@ __all__ = [
     'CommunicationAgent',
     'MonitorAgent',
     'AgentOrchestrator',
-    'NLPAgent'
+    'NLPAgent',
+    'ChatbotAgent'
 ]

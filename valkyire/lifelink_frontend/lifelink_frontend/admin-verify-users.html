@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Verify Users</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">
+    <div class="logo">LifeLink Admin</div>
+    <div>Verify Registrations</div>
+</div>
+
+<div style="padding: 40px;">
+    <h2 style="text-align: center; margin-bottom: 30px;">Pending User Registrations</h2>
+    <div id="usersList"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+window.onload = async function() {
+    const admin = JSON.parse(localStorage.getItem("admin"));
+    if (!admin) {
+        window.location.href = "admin-login.html";
+        return;
+    }
+    
+    const result = await apiRequest("/admin/pending-users");
+    const list = document.getElementById("usersList");
+    
+    if (result.users && result.users.length > 0) {
+        result.users.forEach(user => {
+            const reportDate = new Date(user.reportDate);
+            const daysOld = Math.floor((new Date() - reportDate) / (1000 * 60 * 60 * 24));
+            const isValid = daysOld <= 90;
+            
+            list.innerHTML += `
+                <div class="card" style="margin-bottom: 20px;">
+                    <h3>${user.name}</h3>
+                    <p><strong>Email:</strong> ${user.email}</p>
+                    <p><strong>Phone:</strong> ${user.phone}</p>
+                    <p><strong>Age:</strong> ${user.age} years</p>
+                    <p><strong>Weight:</strong> ${user.weight} kg</p>
+                    <p><strong>Height:</strong> ${user.height} cm</p>
+                    <p><strong>Blood Type:</strong> <span style="font-size: 18px; font-weight: 600;">${user.blood}</span></p>
+                    <p><strong>Report Date:</strong> ${user.reportDate} 
+                        <span style="color: ${isValid ? '#4ade80' : '#f87171'}; font-weight: 600;">
+                            (${daysOld} days old - ${isValid ? 'Valid' : 'Expired'})
+                        </span>
+                    </p>
+                    <p><strong>Report:</strong> <a href="${user.reportData}" download="${user.reportName}" style="color: #60a5fa; text-decoration: underline;">Download ${user.reportName}</a></p>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="approveUser('${user.id}', '${user.email}')" style="flex: 1;">Approve</button>
+                        <button class="btn btn-outline" onclick="rejectUser('${user.id}')" style="flex: 1;">Reject</button>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        list.innerHTML = "<p style='text-align: center; font-size: 18px;'>No pending registrations</p>";
+    }
+};
+
+async function approveUser(userId, email) {
+    const result = await apiRequest("/admin/approve-user", "POST", {user_id: userId, email: email});
+    alert(result.message);
+    location.reload();
+}
+
+async function rejectUser(userId) {
+    const result = await apiRequest("/admin/reject-user", "POST", {user_id: userId});
+    alert(result.message);
+    location.reload();
+}
+</script>
+
+</body>
+</html>

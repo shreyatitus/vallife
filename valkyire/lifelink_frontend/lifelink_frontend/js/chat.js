@@ -1,6 +1,21 @@
-import { API_BASE_URL } from './config.js';
+const BASE_URL = "http://localhost:5000";
+let conversationHistory = [];
 
-let history = [];
+function addMessage(message, isUser) {
+    const chatBox = document.getElementById('chat-box');
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = `
+        margin: 10px 0;
+        padding: 12px 16px;
+        border-radius: 12px;
+        ${isUser ? 
+            'background: rgba(230, 57, 70, 0.2); margin-left: 60px; text-align: right;' : 
+            'background: rgba(255, 255, 255, 0.9); margin-right: 60px; color: #333;'}
+    `;
+    messageDiv.innerHTML = `<strong>${isUser ? 'You' : 'AI Assistant'}:</strong><br>${message}`;
+    chatBox.appendChild(messageDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
 
 async function sendMessage() {
     const input = document.getElementById('message-input');
@@ -8,37 +23,33 @@ async function sendMessage() {
     
     if (!message) return;
     
-    addMessageToChat('You', message);
+    addMessage(message, true);
     input.value = '';
     
+    conversationHistory.push({role: 'user', content: message});
+    
     try {
-        const response = await fetch(`${API_BASE_URL}/ai/chat`, {
+        const response = await fetch(BASE_URL + '/ai-chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, history })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: message,
+                history: conversationHistory
+            })
         });
         
-        const data = await response.json();
-        addMessageToChat('Assistant', data.response);
-        
-        history.push({ role: 'user', content: message });
-        history.push({ role: 'assistant', content: data.response });
+        const result = await response.json();
+        addMessage(result.response, false);
+        conversationHistory.push({role: 'assistant', content: result.response});
     } catch (error) {
-        addMessageToChat('Error', 'Failed to get response');
+        addMessage('Sorry, I encountered an error. Please try again.', false);
     }
 }
 
-function addMessageToChat(sender, text) {
-    const chatBox = document.getElementById('chat-box');
-    const msg = document.createElement('div');
-    msg.style.marginBottom = '10px';
-    msg.innerHTML = `<strong>${sender}:</strong> ${text}`;
-    chatBox.appendChild(msg);
-    chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-document.getElementById('message-input').addEventListener('keypress', (e) => {
+document.getElementById('message-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') sendMessage();
 });
 
-window.sendMessage = sendMessage;
+window.onload = function() {
+    addMessage('Hello! I\'m your LifeLink AI assistant. How can I help you today?', false);
+};

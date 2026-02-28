@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Requests</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">My Blood Requests</div>
+
+<div class="container">
+    <h2>My Requests</h2>
+    <div id="requestsList"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+window.onload = async function() {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user) {
+        window.location.href = "login.html";
+        return;
+    }
+    
+    const result = await apiRequest(`/my-requests?userId=${user.id}`);
+    const list = document.getElementById("requestsList");
+    
+    if (result.requests && result.requests.length > 0) {
+        result.requests.forEach(req => {
+            const statusColor = req.status === 'accepted' ? 'green' : 'orange';
+            list.innerHTML += `
+                <div class="card">
+                    <h3>${req.patientName}</h3>
+                    <p>Blood Type: ${req.blood}</p>
+                    <p>Hospital: ${req.hospital}</p>
+                    <p style="color: ${statusColor}; font-weight: bold;">Status: ${req.status.toUpperCase()}</p>
+                    <p><small>Created: ${new Date(req.created_at).toLocaleString()}</small></p>
+                </div>
+            `;
+        });
+    } else {
+        list.innerHTML = "<p>You haven't created any requests yet</p>";
+    }
+};
+</script>
+
+</body>
+</html>

@@ -9,11 +9,14 @@
 <div class="card">
     <h2>Donor Registration</h2>
 
-    <input type="text" id="name" placeholder="Full Name">
-    <input type="email" id="email" placeholder="Email">
-    <input type="text" id="phone" placeholder="Phone">
+    <input type="text" id="name" placeholder="Full Name" required>
+    <input type="email" id="email" placeholder="Email" required>
+    <input type="text" id="phone" placeholder="Phone" required>
+    <input type="number" id="age" placeholder="Age" required>
+    <input type="number" step="0.1" id="weight" placeholder="Weight (kg)" required>
+    <input type="number" step="0.1" id="height" placeholder="Height (cm)" required>
 
-    <select id="blood">
+    <select id="blood" required>
         <option value="">Select Blood Group</option>
         <option>A+</option>
         <option>B+</option>
@@ -25,9 +28,15 @@
         <option>AB-</option>
     </select>
 
+    <label style="font-size: 14px; margin-top: 10px;">Blood Test Report Date:</label>
+    <input type="date" id="reportDate" required style="color: #333;">
+
+    <label style="font-size: 14px; margin-top: 10px;">Upload Blood Test Report (PDF/Image):</label>
+    <input type="file" id="reportFile" accept=".pdf,.jpg,.jpeg,.png" style="padding: 8px;" required>
+
     <button type="button" onclick="getLocation()">Get My Location</button>
     <p id="locationStatus"></p>
-    <input type="password" id="password" placeholder="Password">
+    <input type="password" id="password" placeholder="Password" required>
 
     <button class="btn btn-primary" onclick="register()">Register</button>
 
@@ -57,23 +66,71 @@ function getLocation() {
 }
 
 async function register() {
+    const age = parseInt(document.getElementById("age").value);
+    const weight = parseFloat(document.getElementById("weight").value);
+    const height = parseFloat(document.getElementById("height").value);
+    const reportDate = new Date(document.getElementById("reportDate").value);
+    const today = new Date();
+    const daysDiff = Math.floor((today - reportDate) / (1000 * 60 * 60 * 24));
+
+    if (age < 18 || age > 65) {
+        document.getElementById("message").innerText = "Age must be between 18 and 65";
+        return;
+    }
+
+    if (weight < 50) {
+        document.getElementById("message").innerText = "Weight must be at least 50 kg";
+        return;
+    }
+
+    if (height < 150) {
+        document.getElementById("message").innerText = "Height must be at least 150 cm";
+        return;
+    }
+
+    if (daysDiff > 90) {
+        document.getElementById("message").innerText = "Blood test report must be within last 90 days";
+        return;
+    }
+
+    if (daysDiff < 0) {
+        document.getElementById("message").innerText = "Report date cannot be in the future";
+        return;
+    }
+
     if (!userLat || !userLon) {
         document.getElementById("message").innerText = "Please get your location first";
         return;
     }
-    
-    const userData = {
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value,
-        phone: document.getElementById("phone").value,
-        blood: document.getElementById("blood").value,
-        latitude: userLat,
-        longitude: userLon,
-        password: document.getElementById("password").value
-    };
 
-    const result = await apiRequest("/register", "POST", userData);
-    document.getElementById("message").innerText = result.message || "Registration successful!";
+    const file = document.getElementById("reportFile").files[0];
+    if (!file) {
+        document.getElementById("message").innerText = "Please upload blood test report";
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const userData = {
+            name: document.getElementById("name").value,
+            email: document.getElementById("email").value,
+            phone: document.getElementById("phone").value,
+            age: age,
+            weight: weight,
+            height: height,
+            blood: document.getElementById("blood").value,
+            latitude: userLat,
+            longitude: userLon,
+            password: document.getElementById("password").value,
+            reportData: e.target.result,
+            reportName: file.name,
+            reportDate: document.getElementById("reportDate").value
+        };
+
+        const result = await apiRequest("/register", "POST", userData);
+        document.getElementById("message").innerText = result.message || "Registration submitted! You will receive an email once verified.";
+    };
+    reader.readAsDataURL(file);
 }
 </script>
 

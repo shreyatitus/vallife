@@ -4,30 +4,56 @@ from database import get_db, init_db
 from services.ai_matching import process_blood_request
 from agents.orchestrator import AgentOrchestrator
 from agents.nlp_agent import NLPAgent
+from agents.chatbot_agent import ChatbotAgent
+from services.auto_escalation_service import AutoEscalationService
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)
 
 init_db()
 
-# Initialize AI agents
 orchestrator = AgentOrchestrator()
 nlp_agent = NLPAgent()
+chatbot = ChatbotAgent(orchestrator)
+escalation_service = AutoEscalationService(orchestrator)
+
+# Start autonomous monitoring
+escalation_service.start_monitoring()
 
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
+    
+    age = int(data.get("age", 0))
+    weight = float(data.get("weight", 0))
+    height = float(data.get("height", 0))
+    report_date = datetime.strptime(data.get("reportDate"), "%Y-%m-%d")
+    days_old = (datetime.now() - report_date).days
+    
+    if age < 18 or age > 65:
+        return jsonify({"message": "Age must be between 18 and 65"}), 400
+    
+    if weight < 50:
+        return jsonify({"message": "Weight must be at least 50 kg"}), 400
+    
+    if height < 150:
+        return jsonify({"message": "Height must be at least 150 cm"}), 400
+    
+    if days_old > 90:
+        return jsonify({"message": "Blood test report must be within last 90 days"}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO users (name, email, phone, blood, password, latitude, longitude) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (data["name"], data["email"], data.get("phone", ""), data["blood"], data["password"], data.get("latitude", 0), data.get("longitude", 0))
+            "INSERT INTO users (name, email, phone, age, weight, height, blood, password, latitude, longitude, reportData, reportName, reportDate, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')",
+            (data["name"], data["email"], data.get("phone", ""), age, weight, height, data["blood"], data["password"], data.get("latitude", 0), data.get("longitude", 0), data.get("reportData"), data.get("reportName"), data.get("reportDate"))
         )
         conn.commit()
-        return jsonify({"message": "Registration successful"})
+        return jsonify({"message": "Registration submitted! You will receive an email once verified."})
     except Exception as e:
-        return jsonify({"message": f"Registration failed: {str(e)}"})
+        return jsonify({"message": f"Registration failed: {str(e)}"}), 400
     finally:
         cursor.close()
         conn.close()
@@ -43,6 +69,8 @@ def login():
     conn.close()
     
     if user:
+        if user['status'] != 'approved':
+            return jsonify({"status": "error", "message": "Account pending admin verification"})
         return jsonify({"status": "success", "user": {"id": user["id"], "name": user["name"], "email": user["email"]}})
     return jsonify({"status": "error", "message": "Invalid credentials"})
 
@@ -65,15 +93,14 @@ def create_request():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO requests (patientName, blood, hospital, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
-        (data["patientName"], data["blood"], data["hospital"], data.get("latitude", 0), data.get("longitude", 0))
+        "INSERT INTO requests (patientName, blood, hospital, latitude, longitude, created_by) VALUES (%s, %s, %s, %s, %s, %s)",
+        (data["patientName"], data["blood"], data["hospital"], data.get("latitude", 0), data.get("longitude", 0), data.get("user_id"))
     )
     conn.commit()
     request_id = cursor.lastrowid
     cursor.close()
     conn.close()
     
-    # Use AI agent orchestrator for intelligent processing
     result = orchestrator.process_blood_request(request_id, data)
     
     if result["status"] == "success":
@@ -103,17 +130,14 @@ def request_blood():
 
 @app.route("/nlp-request", methods=["POST"])
 def nlp_request():
-    """Process natural language blood request"""
     data = request.json
     text = data.get("text", "")
     
-    # Parse natural language
     parsed = nlp_agent.parse_natural_language_request(text)
     
     if not parsed.get("bloodType"):
         return jsonify({"error": "Could not determine blood type from request"})
     
-    # Create request
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -127,7 +151,6 @@ def nlp_request():
     cursor.close()
     conn.close()
     
-    # Process with AI agents
     result = orchestrator.process_blood_request(request_id, {
         "patientName": parsed["patientName"],
         "blood": parsed["bloodType"],
@@ -138,15 +161,37 @@ def nlp_request():
     
     return jsonify({"parsed": parsed, "result": result})
 
+@app.route("/get-requests", methods=["GET"])
+def get_requests():
+    user_id = request.args.get('user_id')
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT blood FROM users WHERE id=%s", (user_id,))
+    user = cursor.fetchone()
+    
+    if user:
+        cursor.execute("""
+            SELECT r.* FROM requests r
+            LEFT JOIN notifications n ON r.id = n.request_id AND n.donor_id = %s
+            WHERE r.blood=%s AND r.status='pending'
+            ORDER BY r.created_at DESC
+        """, (user_id, user['blood']))
+        requests = cursor.fetchall()
+    else:
+        requests = []
+    
+    cursor.close()
+    conn.close()
+    return jsonify({"requests": requests})
+
 @app.route("/donor-response", methods=["POST"])
 def donor_response():
-    """Handle donor response and trigger learning"""
     data = request.json
     notification_id = data["notification_id"]
-    response = data["response"]  # 'accepted' or 'declined'
+    response = data["response"]
     response_time = data.get("response_time", 300)
     
-    # Update notification
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT donor_id FROM notifications WHERE id=%s", (notification_id,))
@@ -155,7 +200,6 @@ def donor_response():
     conn.close()
     
     if notif:
-        # Learn from response
         orchestrator.matcher.update_donor_pattern(
             notif['donor_id'], 
             response_time, 
@@ -163,7 +207,6 @@ def donor_response():
         )
         
         if response == 'declined':
-            # Autonomous retry with next donor
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT request_id FROM notifications WHERE id=%s", (notification_id,))
             req = cursor.fetchone()
@@ -177,21 +220,155 @@ def donor_response():
 
 @app.route("/system-insights", methods=["GET"])
 def system_insights():
-    """Get AI-driven system insights"""
     insights = orchestrator.get_system_insights()
     return jsonify(insights)
 
 @app.route("/autonomous-monitor", methods=["POST"])
 def autonomous_monitor():
-    """Trigger autonomous monitoring and actions"""
     results = orchestrator.run_autonomous_monitoring()
     return jsonify({"actions_taken": results})
 
+@app.route("/accept-request", methods=["POST"])
+def accept_request():
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE requests SET status='accepted', matched_donor_id=%s WHERE id=%s", (data['donor_id'], data['request_id']))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    return jsonify({"message": "Request accepted! Awaiting admin verification."})
+
+@app.route("/my-requests", methods=["GET"])
+def my_requests():
+    user_id = request.args.get('user_id')
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM requests WHERE created_by=%s ORDER BY created_at DESC", (user_id,))
+    requests = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify({"requests": requests})
+
+@app.route("/admin-login", methods=["POST"])
+def admin_login():
+    data = request.json
+    if data["username"] == "admin" and data["password"] == "admin123":
+        return jsonify({"status": "success"})
+    return jsonify({"status": "error", "message": "Invalid credentials"})
+
+@app.route("/admin/accepted-requests", methods=["GET"])
+def admin_accepted_requests():
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM requests WHERE status='accepted' ORDER BY created_at DESC")
+    requests = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify({"requests": requests})
+
+@app.route("/admin/verify-request", methods=["POST"])
+def admin_verify_request():
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT matched_donor_id FROM requests WHERE id=%s", (data['request_id'],))
+    req = cursor.fetchone()
+    
+    if req and req['matched_donor_id']:
+        cursor.execute("UPDATE requests SET status='completed' WHERE id=%s", (data['request_id'],))
+        cursor.execute("UPDATE users SET donations=donations+1, points=points+10 WHERE id=%s", (req['matched_donor_id'],))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Request verified! Donor awarded 10 points."})
+    
+    cursor.close()
+    conn.close()
+    return jsonify({"message": "Request not found"})
+
+@app.route("/admin/pending-users", methods=["GET"])
+def admin_pending_users():
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id, name, email, phone, age, weight, height, blood, reportData, reportName, reportDate FROM users WHERE status='pending' ORDER BY created_at DESC")
+    users = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify({"users": users})
+
+@app.route("/admin/approve-user", methods=["POST"])
+def admin_approve_user():
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT email, name FROM users WHERE id=%s", (data['user_id'],))
+    user = cursor.fetchone()
+    
+    cursor.execute("UPDATE users SET status='approved' WHERE id=%s", (data['user_id'],))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    if user:
+        try:
+            from services.email_service import send_email
+            send_email(
+                user['email'], 
+                "LifeLink Account Approved", 
+                f"Dear {user['name']},\n\nYour LifeLink donor account has been verified and approved! You can now login and start saving lives.\n\nThank you for joining LifeLink.\n\nBest regards,\nLifeLink Team"
+            )
+        except Exception as e:
+            print(f"Email error: {e}")
+    
+    return jsonify({"message": "User approved and notified via email"})
+
+@app.route("/admin/reject-user", methods=["POST"])
+def admin_reject_user():
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id=%s", (data['user_id'],))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"message": "User registration rejected"})
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    """Main chatbot endpoint - handles all conversational interactions"""
+    data = request.json
+    user_id = data.get("user_id")
+    message = data.get("message", "")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+    
+    if not message:
+        return jsonify({"error": "Message is required"}), 400
+    
+    # Process message with chatbot agent
+    response = chatbot.process_message(user_id, message, latitude, longitude)
+    
+    return jsonify(response)
+
+@app.route("/escalation-stats", methods=["GET"])
+def escalation_stats():
+    """Get auto-escalation statistics"""
+    stats = escalation_service.get_escalation_stats()
+    return jsonify({"stats": stats})
+
 if __name__ == "__main__":
-    print("🤖 LifeLink AI Agent System Starting...")
+    print("🤖 LifeLink Agentic AI System Starting...")
     print("✓ Coordinator Agent: Analyzes requests and makes strategic decisions")
     print("✓ Matcher Agent: Finds optimal donors with predictive scoring")
     print("✓ Communication Agent: Generates personalized messages")
     print("✓ Monitor Agent: Autonomous monitoring and retry logic")
     print("✓ NLP Agent: Natural language request processing")
+    print("✓ Chatbot Agent: Conversational interface with autonomous actions")
+    print("✓ Auto-Escalation: Background monitoring every 5 minutes")
+    print("\n🚀 System ready! Chatbot endpoint: POST /chat")
     app.run(debug=True, port=5000)

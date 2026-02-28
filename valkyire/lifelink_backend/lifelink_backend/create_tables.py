@@ -16,11 +16,21 @@ cursor.execute("""
         name VARCHAR(255),
         email VARCHAR(255) UNIQUE,
         phone VARCHAR(20),
+        age INT,
+        weight FLOAT,
+        height FLOAT,
         blood VARCHAR(5),
         password VARCHAR(255),
+        latitude FLOAT DEFAULT 0,
+        longitude FLOAT DEFAULT 0,
+        reportData TEXT,
+        reportName VARCHAR(255),
+        reportDate DATE,
+        status VARCHAR(20) DEFAULT 'pending',
         donations INT DEFAULT 0,
         points INT DEFAULT 0,
-        lastDonation VARCHAR(50)
+        lastDonation VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
 """)
 
@@ -31,6 +41,13 @@ cursor.execute("""
         blood VARCHAR(5),
         hospital VARCHAR(255),
         location VARCHAR(255),
+        latitude FLOAT DEFAULT 0,
+        longitude FLOAT DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'pending',
+        matched_donor_id INT,
+        created_by INT,
+        urgency VARCHAR(20),
+        natural_language_request TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
 """)

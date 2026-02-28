@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - LifeLink</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">
+    <div class="logo">LifeLink AI Assistant</div>
+    <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="dashboard.html">Dashboard</a>
+    </div>
+</div>
+
+<div style="max-width: 800px; margin: 40px auto; padding: 20px;">
+    <div class="card" style="max-width: 100%;">
+        <h2>Ask Me Anything</h2>
+        <p style="text-align: center; margin-bottom: 20px; opacity: 0.9;">
+            I can help you with blood donation questions, eligibility, and more!
+        </p>
+        
+        <div id="chat-box" style="min-height: 400px; margin-bottom: 20px;"></div>
+        
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="message-input" placeholder="Type your question..." 
+                   style="flex: 1; color: #333;" onkeypress="if(event.key==='Enter') sendMessage()">
+            <button class="btn btn-primary" onclick="sendMessage()" style="width: auto; margin: 0;">Send</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+let conversationHistory = [];
+
+function addMessage(message, isUser) {
+    const chatBox = document.getElementById('chat-box');
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = `
+        margin: 10px 0;
+        padding: 12px 16px;
+        border-radius: 12px;
+        ${isUser ? 
+            'background: rgba(230, 57, 70, 0.2); margin-left: 60px; text-align: right;' : 
+            'background: rgba(255, 255, 255, 0.15); margin-right: 60px;'}
+    `;
+    messageDiv.innerHTML = `<strong>${isUser ? 'You' : 'AI Assistant'}:</strong><br>${message}`;
+    chatBox.appendChild(messageDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+async function sendMessage() {
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    addMessage(message, true);
+    input.value = '';
+    
+    conversationHistory.push({role: 'user', content: message});
+    
+    try {
+        const result = await apiRequest('/ai-chat', 'POST', {
+            message: message,
+            history: conversationHistory
+        });
+        
+        addMessage(result.response, false);
+        conversationHistory.push({role: 'assistant', content: result.response});
+    } catch (error) {
+        addMessage('Sorry, I encountered an error. Please try again.', false);
+    }
+}
+
+window.onload = function() {
+    addMessage('Hello! I\'m your LifeLink AI assistant. How can I help you today?', false);
+};
+</script>
+
+</body>
+</html>

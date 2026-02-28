@@ -2,6 +2,7 @@ from agents.coordinator_agent import CoordinatorAgent
 from agents.matcher_agent import MatcherAgent
 from agents.communication_agent import CommunicationAgent
 from agents.monitor_agent import MonitorAgent
+from agents.nlp_agent import NLPAgent
 from database import get_db
 import json
 
@@ -13,6 +14,7 @@ class AgentOrchestrator:
         self.matcher = MatcherAgent()
         self.communicator = CommunicationAgent()
         self.monitor = MonitorAgent()
+        self.nlp_agent = NLPAgent()
     
     def process_blood_request(self, request_id, request_data):
         """Autonomous multi-agent workflow for blood requests"""

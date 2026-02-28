@@ -1,10 +1,12 @@
 import os
 import json
 from anthropic import Anthropic
+from agents.nlp_agent import NLPAgent
 
 class CoordinatorAgent:
     def __init__(self):
         self.client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        self.nlp_agent = NLPAgent()
         
     def analyze_request(self, request_data):
         """Analyze blood request using LLM to determine urgency and context"""

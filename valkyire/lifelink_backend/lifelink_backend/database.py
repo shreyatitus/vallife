@@ -1,10 +1,11 @@
 import mysql.connector
+import os
 
 def get_db():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="Swetha@03lal",
+        password=os.environ.get("MYSQL_PASSWORD", ""),  # Get from environment or empty
         database="lifelink"
     )
 
@@ -12,7 +13,7 @@ def init_db():
     conn = mysql.connector.connect(
         host="localhost",
         user="root",
-        password="Swetha@03lal"
+        password=os.environ.get("MYSQL_PASSWORD", "")  # Get from environment or empty
     )
     cursor = conn.cursor()
     cursor.execute("CREATE DATABASE IF NOT EXISTS lifelink")
@@ -28,13 +29,21 @@ def init_db():
             name VARCHAR(255),
             email VARCHAR(255) UNIQUE,
             phone VARCHAR(20),
+            age INT,
+            weight DECIMAL(5,2),
+            height DECIMAL(5,2),
             blood VARCHAR(5),
             password VARCHAR(255),
             donations INT DEFAULT 0,
             points INT DEFAULT 0,
             lastDonation DATE,
             latitude DECIMAL(10, 8),
-            longitude DECIMAL(11, 8)
+            longitude DECIMAL(11, 8),
+            reportData LONGTEXT,
+            reportName VARCHAR(255),
+            reportDate DATE,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     

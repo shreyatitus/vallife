@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Verify Donations</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="navbar">
+    <div class="logo">LifeLink Admin</div>
+    <div>Verify Donations</div>
+</div>
+
+<div style="padding: 40px;">
+    <h2 style="text-align: center; margin-bottom: 30px;">Accepted Donations (Pending Verification)</h2>
+    <div id="requestsList"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+window.onload = async function() {
+    const admin = JSON.parse(localStorage.getItem("admin"));
+    if (!admin) {
+        window.location.href = "admin-login.html";
+        return;
+    }
+    
+    const result = await apiRequest("/admin/accepted-requests");
+    const list = document.getElementById("requestsList");
+    
+    if (result.requests && result.requests.length > 0) {
+        result.requests.forEach(req => {
+            list.innerHTML += `
+                <div class="card" style="margin-bottom: 20px;">
+                    <h3>Patient: ${req.patientName}</h3>
+                    <p><strong>Blood Type:</strong> ${req.blood}</p>
+                    <p><strong>Hospital:</strong> ${req.hospital}</p>
+                    <p><strong>Location:</strong> ${req.location || 'N/A'}</p>
+                    <p><strong>Donor:</strong> ${req.donorName || 'Unknown'}</p>
+                    <p><strong>Donor Email:</strong> ${req.donorEmail || 'N/A'}</p>
+                    <p><strong>Accepted At:</strong> ${new Date(req.acceptedAt).toLocaleString()}</p>
+                    <div style="margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="verifyDonation('${req.id}')" style="width: 100%;">
+                            Verify Donation Complete (Award 10 Points)
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        list.innerHTML = "<p style='text-align: center; font-size: 18px;'>No donations pending verification</p>";
+    }
+};
+
+async function verifyDonation(requestId) {
+    if (!confirm("Confirm that the donor has completed the blood donation?")) {
+        return;
+    }
+    
+    const result = await apiRequest("/admin/verify-request", "POST", {request_id: requestId});
+    alert(result.message);
+    location.reload();
+}
+</script>
+
+</body>
+</html>
